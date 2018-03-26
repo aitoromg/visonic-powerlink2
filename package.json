@@ -1,0 +1,25 @@
+{
+  "name": "visonic-powerlink2",
+  "version": "1.0.0",
+  "description": "Allows you to get and set the status of a Visonic security system (i.e. arm or disarm it) via its PowerLink2 communication module",
+  "keywords": [
+    "visonic",
+    "powerlink2",
+    "powermax"
+  ],
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michael McNeela",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaelmcneela/visonic-powerlink2"
+  },
+  "bugs": "https://github.com/michaelmcneela/visonic-powerlink2/issues",
+  "license": "MIT",
+  "dependencies": {
+    "one-concurrent": "^1.0.0",
+    "request": "^2.85.0"
+  }
+}
