@@ -20,6 +20,8 @@ function PowerLink2(config, log) {
 	self.baseURL = 'http://' + config.host; // Would use HTTPS, but the connection fails to handshake
 	self.username = config.username;
 	self.password = config.password;
+
+	self.timeout = config.timeout || 2500;
 }
 
 PowerLink2.STATUSES = {
@@ -39,7 +41,13 @@ PowerLink2.prototype.getStatus = function (callback) {
 	var self = this;
 
 	self.authenticatedRequest({
-		url: self.baseURL + '/web/ajax/alarm.chkstatus.ajax.php'
+		url: self.baseURL + '/web/ajax/alarm.chkstatus.ajax.php',
+		method: 'POST',
+		form: {
+			curindex: self.getStatusIndex || '0',
+			sesusername: self.username,
+			sesusermanager: '1'
+		}
 	},
 	function(error, response, body) {
 
@@ -54,6 +62,19 @@ PowerLink2.prototype.getStatus = function (callback) {
 			self.log(`body: ${body}`)
 		}
 
+		var noChange = body.match(/<customStatus>\[NOCNG\]<\/customStatus>/);
+		if (noChange) {
+			self.log(`Status hasn't changed– returning last status`);
+			callback(null, self.lastStatus);
+			return;
+		}
+
+		var indexMatch = body.match(/<index>([^]+?)<\/index>/);
+		if (indexMatch) {
+			self.getStatusIndex = indexMatch[1];
+			self.debugLog(`getStatusIndex: ${self.getStatusIndex}`);
+		}
+
 		var statusString = body.match(/<system>[^]+<status>([^]+)<\/status>[^]+<\/system>/)[1];
 		// statusString = "Ready" / "HOME" / "AWAY" / unexpected
 
@@ -66,6 +87,7 @@ PowerLink2.prototype.getStatus = function (callback) {
 		}
 
 		let status = statusStringToStatus[statusString] || PowerLink2.STATUSES.UNKNOWN;
+		self.lastStatus = status;
 
 		callback(error, status);
 	});
@@ -87,8 +109,10 @@ PowerLink2.prototype.setStatus = function (status, callback) {
 
 	let statusString = stringMap[status]; // Get the right string for use in the API call
 
-	if (statusString == undefined)
-		throw new Error(`Cannot set status to: ${status}`); // For example: PowerLink2.STATUSES.EXIT_DELAY
+	if (statusString == undefined) {
+		callback(new Error(`Cannot set status to: ${status}`)); // For example: PowerLink2.STATUSES.EXIT_DELAY
+		return;
+	}
 
 	self.authenticatedRequest({
 		url: self.baseURL + '/web/ajax/security.main.status.ajax.php',
@@ -132,7 +156,8 @@ PowerLink2.prototype.getAuthenticationCookie = function (callback) {
 		form: {
 			user: self.username,
 			pass: self.password
-		}
+		},
+		timeout: self.timeout
 	}, 
 	function(error, response, body) {
 
@@ -161,7 +186,7 @@ PowerLink2.prototype.getAuthenticationCookie = function (callback) {
 		}
 
 		let cookie = response.headers['set-cookie'][0].match(/(.+);/)[1];
-		// self.cookie = cookie
+		self.cookie = cookie
 		self.debugLog(`Got authentication cookie: ${cookie}`);
 
 		callback(null, cookie);
@@ -191,17 +216,23 @@ PowerLink2.prototype.authenticatedRequest = function (config, callback) {
 		config.headers = config.headers || {};
 		config.headers['Cookie'] = cookie
 
+		config.timeout = config.timeout || self.config.timeout;
+
 		request(config, function (error, response, body) {
 
 			if (!error) {
 
-				// Check whether we're still logged in
-				if (!(body.match(/OK/) || body.match(/<system>/))) { // The two requests we make should always contain one of these two strings, if we're still logged in
+				// Check whether we're not logged in anymore
+				if (body == '' || body.match(/\[RELOGIN\]/)) {
 
-					self.debugLog(`Our cookie isn't valid anymore - let's get another one`);
+					self.debugLog(`Our cookie probably isn't valid anymore - let's get another one`);
 
 					self.cookie = null; // Invalidate the cookie we have
-					self.authenticatedRequest(config, callback); // Re-run this request, fetching a new cookie in the meantime
+
+					setTimeout(function () {
+						self.authenticatedRequest(config, callback); // Re-run this request, fetching a new cookie in the meantime
+					}, 3*1000); // Sane retry delay
+					
 					return;
 				}
 			}
