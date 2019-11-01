@@ -21,7 +21,7 @@ function PowerLink2(config, log) {
 	self.username = config.username;
 	self.password = config.password;
 
-	self.timeout = config.timeout || 2500;
+	self.timeout = config.pollingInterval || 2500;
 }
 
 PowerLink2.STATUSES = {
@@ -69,7 +69,7 @@ PowerLink2.prototype.getStatus = function (callback) {
 			return;
 		}
 
-		var indexMatch = body.match(/<index>([^]+?)<\/index>/);
+		var indexMatch = body.match(/<arm>([^]+?)<\/arm>/);
 		if (indexMatch) {
 			self.getStatusIndex = indexMatch[1];
 			self.debugLog(`getStatusIndex: ${self.getStatusIndex}`);
@@ -77,13 +77,14 @@ PowerLink2.prototype.getStatus = function (callback) {
 
 		var statusString = body.match(/<system>[^]+<status>([^]+)<\/status>[^]+<\/system>/)[1];
 		// statusString = "Ready" / "HOME" / "AWAY" / unexpected
+		// statusString = "Listo" / "PARCIAL" / "TOTAL" / unexpected
 
 		let statusStringToStatus = {
-			'Ready': PowerLink2.STATUSES.DISARMED,
-			'NotReady': PowerLink2.STATUSES.DISARMED,
-			'Exit Delay': PowerLink2.STATUSES.EXIT_DELAY,
-			'HOME': PowerLink2.STATUSES.ARMED_HOME,
-			'AWAY': PowerLink2.STATUSES.ARMED_AWAY,
+			'Listo': PowerLink2.STATUSES.DISARMED,
+			'No Listo': PowerLink2.STATUSES.DISARMED,
+			'Retardo Salida': PowerLink2.STATUSES.EXIT_DELAY,
+			'PARCIAL': PowerLink2.STATUSES.ARMED_HOME,
+			'TOTAL': PowerLink2.STATUSES.ARMED_AWAY,
 		}
 
 		let status = statusStringToStatus[statusString] || PowerLink2.STATUSES.UNKNOWN;
@@ -216,7 +217,7 @@ PowerLink2.prototype.authenticatedRequest = function (config, callback) {
 		config.headers = config.headers || {};
 		config.headers['Cookie'] = cookie
 
-		config.timeout = config.timeout || self.config.timeout;
+		config.timeout = config.timeout || self.timeout;
 
 		request(config, function (error, response, body) {
 
